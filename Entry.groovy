@@ -277,15 +277,30 @@ node ('master')
         stage('Parsing code check result...') {
             // 解析生成的 xml 文件
             // 并移除掉不在本次 PR 中产生的错误信息
+            // 返回值为找到的错误数量
             def return_val = github_api(
                 [
                     method: 'parse_xml_result',
                     base_sha: env.PR_BASE_SHA,
                     pr_number: params.PR_NUMBER,
                     resultFile: "${env.GITHUB_REPO_DIR}/${env.CODECHECKRESULTFILE}",
-                ]
+                ],
+                'getStatus'
             );
-            echo return_val
+            env.ERROR_COUNT = return_val
+            echo "Totally error count: ${env.ERROR_COUNT}"
+        }
+
+        // 创建 review comment
+        stage('Upload PR Review comment') {
+            return_val = github_api(
+                [
+                    method: 'pr_comment',
+                    pr_number: params.PR_NUMBER,
+                    github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
+                    checkResultFile: "${env.GITHUB_REPO_NAME}/${env.CODECHECKRESULTFILE}"
+                ]
+            )
         }
 
         stage('Uploading result') {
@@ -300,34 +315,33 @@ node ('master')
                 unHealthy: '0',
                 unstableTotalAll: '0'
             )
-            // 说明检测失败
-            if ('FAILURE' == currentBuild.result) {
-                // 创建 review comment
-                stage('Upload PR Review comment') {
-                    return_val = github_api(
-                        [
-                            method: 'pr_comment',
-                            pr_number: params.PR_NUMBER,
-                            github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
-                            checkResultFile: "${env.GITHUB_REPO_NAME}/${env.CODECHECKRESULTFILE}"
-                        ]
-                    )
-                }
 
-                // 抛出代码检测异常
-                throw new codeCheckException('Code does not meet coding standard')
-            } else {
+            // 创建 review comment
+            return_val = github_api(
+                [
+                    method: 'pr_comment',
+                    pr_number: params.PR_NUMBER,
+                    github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
+                    checkResultFile: "${env.GITHUB_REPO_NAME}/${env.CODECHECKRESULTFILE}"
+                ]
+            )
+
+            // 说明检测失败
+            if (env.ERROR_COUNT == '0') {
                 github_api(
                     [
                         method: 'pr_status',
                         github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                         state_url: env.PR_statuses_url,
-                        state: 'sucess',
+                        state: 'success',
                         target_url: "https://devopscn.rtp.raleigh.ibm.com:8443/job/SC-CodeQuality-Check/${env.BUILD_NUMBER}/",
                         description: 'All check passed',
                         context: 'China CI',
                     ]
                 )
+            } else {
+                // 抛出代码检测异常
+                throw new codeCheckException('Code does not meet coding standard')
             }
         }
     } catch (codeCheckException e) {

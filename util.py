@@ -364,6 +364,7 @@ def parse_xml_result(args):
     #for removeFile in removeFileNodeList:
     #    root.remove(removeFile)
     tree.write(args.fileName)
+    print(errorList) if errorLine else ''
 
 
 def add_common_args(parser):
