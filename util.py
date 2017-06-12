@@ -17,15 +17,15 @@ import errno
 import requests
 from argparse import ArgumentParser
 from json import loads as jsloads
+from json import dumps as jsdumps
 from shlex import split as shsplit
 from subprocess import Popen, PIPE
 import xml.etree.ElementTree as ET
 
-import json
-
-GITHUB_API_URL   = os.environ['GITHUB_API_URL']
+GITHUB_API_URL = os.environ['GITHUB_API_URL']
 GITHUB_REPO_USER = os.environ['GITHUB_REPO_USER']
 GITHUB_REPO_NAME = os.environ['GITHUB_REPO_NAME']
+
 
 def fetch_api(url, githubToken, **cus_headers):
     headers = {
@@ -38,13 +38,8 @@ def fetch_api(url, githubToken, **cus_headers):
 
     postData = cus_headers.get('data', {})
 
-    # method = cus_headers.get('method', 'get')
-    # response = requests.post(url, headers=headers, data=json.dumps(postData)) if postData else requests.get(url, headers=headers)
-    #if postData:
-    #    response = requests.post(url, headers=headers, data=json.dumps(postData))
-    #else:
     method_to_call = getattr(requests, cus_headers.get('method', 'get'))
-    response = requests.post(url, headers=headers, data=json.dumps(postData)) if postData else method_to_call(url, headers=headers)
+    response = requests.post(url, headers=headers, data=jsdumps(postData)) if postData else method_to_call(url, headers=headers)
 
     if not response.ok:
         response.raise_for_status()
@@ -73,7 +68,7 @@ def create_pr_status(args):
         "description": args.description,
         "context": args.context
     }
-    fetch_api(args.status_url, args.github_token, data = statusData)
+    fetch_api(args.status_url, args.github_token, data=statusData)
 
 
 def get_pr_info(args):
@@ -84,7 +79,12 @@ def get_pr_info(args):
     pr_number = args.pr_number
     assert pr_number, "Error: PR number is empty."
 
-    apiUrl = "{0:s}/repos/{1:s}/{2:s}/pulls/{3:d}".format(GITHUB_API_URL, GITHUB_REPO_USER, GITHUB_REPO_NAME, pr_number)
+    apiUrl = "{0:s}/repos/{1:s}/{2:s}/pulls/{3:d}".format(
+        GITHUB_API_URL,
+        GITHUB_REPO_USER,
+        GITHUB_REPO_NAME,
+        pr_number
+    )
     # 直接将结果打印出来, 结果将被 groovy 处理
     print(fetch_api(url=apiUrl, githubToken=github_token))
 
@@ -112,14 +112,17 @@ def generate_pr_patch(args):
     data = jsloads(fetch_api(
         url=apiUrl,
         githubToken=github_token,
-        headers = {'Content-Type': 'application/vnd.github.v3.diff'}
+        headers={'Content-Type': 'application/vnd.github.v3.diff'}
         ))
     fileList = ''
     for prfile in data['files']:
         # 不需要记录被移除的文件
-        if prfile['status'] == 'removed':
+        # 并且只检测 PHP 和 JS 文件
+        if prfile['status'] == 'removed' or os.path.splitext(prfile[u'filename'])[1] not in ('.php', '.js'):
             continue
-        filename = "{0:s}/{1:s}".format(TMP_DIR,prfile[u'filename']) # sugarcrm/custom/include/javascript/Help.js
+        # sugarcrm/custom/include/javascript/Help.js
+        filename = "{0:s}/{1:s}".format(TMP_DIR, prfile[u'filename'])
+
         filedir = os.path.dirname(filename)
         if not os.path.exists(filedir):
             try:
@@ -135,10 +138,10 @@ def generate_pr_patch(args):
     print(fileList)
 
 
-def write_context_to_file(cmds, file_name=None, acceptExitCode = (0,)):
+def write_context_to_file(cmds, file_name=None, acceptExitCode=(0,)):
     msg = None
     return_code = 0
-    if file_name == None:
+    if file_name is None:
         o_file = PIPE
     else:
         o_file = open(file_name, 'w+')
@@ -163,13 +166,14 @@ Error message:{0:s}
         return_code = -1
     finally:
         if return_code == 0:
+            # 如果 file_name 为空, 则表示将结果返回给字符串
             if file_name is None:
                 return procCom[0]
             else:
                 o_file.close()
-                return 0
+                return file_name
         print(msg)
-        sys.exit(-1)
+        return '/dev/null'
 
 
 def writeParentFile(sourceFile, base_sha, mango_work_tree):
@@ -177,9 +181,13 @@ def writeParentFile(sourceFile, base_sha, mango_work_tree):
     生成一个临时文件, 将文件修改前的版本写入到临时文件中
     '''
     tempFile = tempfile.mkstemp()[1]
-    git_cmd = 'git --git-dir={0:s}/.git --work-tree={0:s} show {1:s}:{2:s}'.format(mango_work_tree, base_sha, sourceFile)
-    write_context_to_file(git_cmd, tempFile)
-    return tempFile
+    git_cmd = 'git --git-dir={0:s}/.git --work-tree={0:s} show {1:s}:{2:s}'.format(
+        mango_work_tree,
+        base_sha,
+        sourceFile
+    )
+    return write_context_to_file(git_cmd, tempFile)
+    # return tempFile
 
 
 def getChangedLine(parentFile, currentFile):
@@ -192,8 +200,6 @@ def getDiffPosition(diffFileObj, lineNumber, position=-1, sourceLine=0):
     要使用PR review comment, 首先必须获取到 diff 文件的 行号(position)
     而不是源文件的行号
     '''
-    # 从第一行开始算起
-    #sourceLines = 0
 
     bFound = False
     for line in diffFileObj:
@@ -201,7 +207,7 @@ def getDiffPosition(diffFileObj, lineNumber, position=-1, sourceLine=0):
             position += 1
             continue
         if line.startswith('@@ '):
-            #@@ -13,6 +13,11
+            # @@ -13,6 +13,11
             # 获取源文件的起始行号
             # position 从 -1 开始计算, 因为只有第一个出现的 @@ 不会计算position
             # 其余的 @@ 全部都需要被计算到 position 中
@@ -224,7 +230,7 @@ def remove_review_comments(commentListUrl, githubToken):
     迭代 list 循环删除所有 comment
     '''
     for commentId in commentListUrl:
-        fetch_api(commentId, githubToken, method = 'delete')
+        fetch_api(commentId, githubToken, method='delete')
 
 
 def get_review_comments(args):
@@ -235,7 +241,12 @@ def get_review_comments(args):
 
     commentListUrl = []
 
-    apiUrl = "{0:s}/repos/{1:s}/{2:s}/pulls/{3:d}/comments".format(GITHUB_API_URL, GITHUB_REPO_USER, GITHUB_REPO_NAME, args.pr_number)
+    apiUrl = "{0:s}/repos/{1:s}/{2:s}/pulls/{3:d}/comments".format(
+        GITHUB_API_URL,
+        GITHUB_REPO_USER,
+        GITHUB_REPO_NAME,
+        args.pr_number
+    )
     response = jsloads(fetch_api(apiUrl, args.github_token))
 
     # 获取当前 token 用户下的所有 comments
@@ -250,7 +261,7 @@ def create_review_comments(args):
     读取代码检测生成的 XML 文件
     在创建 comment 之前, 要先删除当前用户创建的所有在该 PR 下的 comment
     '''
-    GITHUB_REPO_DIR   = os.environ['GITHUB_REPO_DIR']
+    GITHUB_REPO_DIR = os.environ['GITHUB_REPO_DIR']
     assert GITHUB_REPO_DIR, "Error: Please provew git repository directory."
 
     TMP_DIR = os.environ['TMP_DIR']
@@ -285,7 +296,7 @@ def create_review_comments(args):
         # 以便继续查找行号时没有 @@ -17,7 +17,7 相关信息也可以获取原始代码行号
 
         # position 从 -1 开始计算, 因为只有第一个出现的 @@ 不会计算position
-            # 其余的 @@ 全部都需要被计算到 position 中
+        # 其余的 @@ 全部都需要被计算到 position 中
         positionList = [-1, 0]
         sourceFileName = sourceFile.attrib['name'].replace("{0:s}/".format(GITHUB_REPO_DIR), '')
         diffFile = "{0:s}/{1:s}".format(TMP_DIR, sourceFileName)
@@ -304,25 +315,31 @@ def create_review_comments(args):
                     ),
                 })
 
-    prComments = {
-        # "body": "Codeing style check",
-        "event": "REQUEST_CHANGES",
-        "comments": errorContext
-    }
+    if len(errorContext):
+        prComments = {
+            # "body": "Codeing style check",
+            "event": "REQUEST_CHANGES",
+            "comments": errorContext
+        }
 
-    apiUrl = "{0:s}/repos/{1:s}/{2:s}/pulls/{3:d}/reviews".format(GITHUB_API_URL, GITHUB_REPO_USER, GITHUB_REPO_NAME, args.pr_number)
-    fetch_api(apiUrl, args.github_token, data = prComments)
+        apiUrl = "{0:s}/repos/{1:s}/{2:s}/pulls/{3:d}/reviews".format(
+            GITHUB_API_URL,
+            GITHUB_REPO_USER,
+            GITHUB_REPO_NAME,
+            args.pr_number
+        )
+        fetch_api(apiUrl, args.github_token, data=prComments)
 
 
 def parse_xml_result(args):
     '''
     解析生成的完整的代码检测 xml 文件, 移除并不是在本次PR中修改的行.
     '''
-    GITHUB_REPO_DIR   = os.environ['GITHUB_REPO_DIR']
+    GITHUB_REPO_DIR = os.environ['GITHUB_REPO_DIR']
     assert GITHUB_REPO_DIR, "Error: Please provew git repository directory."
     assert args.base_sha, "Error: Please provide base SHA"
 
-    errorList = []
+    errorCount = 0
     removeFileNodeList = []
 
     try:
@@ -335,14 +352,21 @@ def parse_xml_result(args):
     root = tree.getroot()
     for sourceFile in root.iter('file'):
         sourceFileName = sourceFile.attrib['name'].replace("{0:s}/".format(GITHUB_REPO_DIR), '')
+        print("   Checking {0:s}".format(sourceFileName))
 
         # 根据PR改动之前的内容生成临时文件
         # 由于使用 git 命令获取修改之前的文件时指定了 git 的工作目录, 所以 sourceFileName 需要以git为基准目录
-        tempFile = writeParentFile(sourceFileName, args.base_sha, GITHUB_REPO_DIR)
+        # 如果 base 中不存在, 则返回 /dev/null
+        tempFile = writeParentFile(
+            sourceFileName,
+            args.base_sha,
+            GITHUB_REPO_DIR
+        )
+        print("TEMPFILE: {0:s}".format(tempFile))
 
         # 获取改动的行号, sourceFile 需要使用决定路径
         changedLines = (getChangedLine(tempFile, sourceFile.attrib['name'])).split()
-        print(changedLines)
+        # print(changedLines)
 
         removeErrorNodeList = []
 
@@ -350,7 +374,13 @@ def parse_xml_result(args):
             currentAttrib = errorLine.attrib
             if currentAttrib['line'] in changedLines:
                 currentAttrib['filePath'] = sourceFileName
-                errorList.append(currentAttrib)
+                # errorList.append(currentAttrib)
+                print("[{0:s}] Line {1:s}: {2:s}".format(
+                    currentAttrib['severity'],
+                    currentAttrib['line'],
+                    currentAttrib['message']
+                ))
+                errorCount += 1
             else:
                 removeErrorNodeList.append(errorLine)
         # 必须单独列出来删除, 否则在上一个 foreach 将删除不干净
@@ -360,11 +390,8 @@ def parse_xml_result(args):
         if sourceFile.find('error') is None:
             removeFileNodeList.append(sourceFile)
 
-    # 移除空的 file 节点
-    #for removeFile in removeFileNodeList:
-    #    root.remove(removeFile)
     tree.write(args.fileName)
-    print(errorList) if errorLine else ''
+    sys.exit(errorCount)
 
 
 def add_common_args(parser):
@@ -391,26 +418,30 @@ def get_args():
 
     # 获取 PR 信息
     arg_pr_info = subparsers.add_parser('pr', help='patch help')
-    arg_pr_info.add_argument('--type',
-                              dest="type",
-                              type=str,
-                              default="get_pr_info",
-                              help='Get base and head files for a PR')
+    arg_pr_info.add_argument(
+        '--type',
+        dest="type",
+        type=str,
+        default="get_pr_info",
+        help='Get base and head files for a PR')
     add_common_args(arg_pr_info)
 
     # 生成PR中文件的补丁
     arg_pr_patch = subparsers.add_parser('patch', help='generate patch files')
-    arg_pr_patch.add_argument('--type',
-                              dest="type",
-                              type=str,
-                              default="generate_pr_patch",
-                              help='Generate patch for each file in the PR')
-    arg_pr_patch.add_argument('-t', '--token',
-                        action='store',
-                        dest='github_token',
-                        required=True,
-                        metavar='Github_Token',
-                        help='Github Token')
+    arg_pr_patch.add_argument(
+        '--type',
+        dest="type",
+        type=str,
+        default="generate_pr_patch",
+        help='Generate patch for each file in the PR')
+    arg_pr_patch.add_argument(
+        '-t',
+        '--token',
+        action='store',
+        dest='github_token',
+        required=True,
+        metavar='Github_Token',
+        help='Github Token')
     arg_pr_patch.add_argument(
         '--base-sha',
         action='store',
@@ -429,12 +460,16 @@ def get_args():
     )
 
     # 解析代码检测结果 XML 文件
-    parse_xml_result_args = subparsers.add_parser('parse-result', help='parse code style result from XML')
-    parse_xml_result_args.add_argument('--type',
-                              dest="type",
-                              type=str,
-                              default="parse_xml_result",
-                              help='Parse code style result from XML')
+    parse_xml_result_args = subparsers.add_parser(
+        'parse-result',
+        help='parse code style result from XML'
+    )
+    parse_xml_result_args.add_argument(
+        '--type',
+        dest="type",
+        type=str,
+        default="parse_xml_result",
+        help='Parse code style result from XML')
     parse_xml_result_args.add_argument(
         '--base-sha',
         action='store',
@@ -453,12 +488,16 @@ def get_args():
     )
 
     # 生成 review comment
-    create_review_comments_args = subparsers.add_parser('pr-comment', help='Create review comment for PR')
-    create_review_comments_args.add_argument('--type',
-                              dest="type",
-                              type=str,
-                              default="create_review_comments",
-                              help='Create review comment for PR')
+    create_review_comments_args = subparsers.add_parser(
+        'pr-comment',
+        help='Create review comment for PR'
+    )
+    create_review_comments_args.add_argument(
+        '--type',
+        dest="type",
+        type=str,
+        default="create_review_comments",
+        help='Create review comment for PR')
     add_common_args(create_review_comments_args)
     create_review_comments_args.add_argument(
         '--file',
@@ -470,18 +509,25 @@ def get_args():
     )
 
     # create PR status
-    create_pr_status_args = subparsers.add_parser('pr-status', help='Create PR status')
-    create_pr_status_args.add_argument('--type',
-                              dest="type",
-                              type=str,
-                              default="create_pr_status",
-                              help='Create PR status')
-    create_pr_status_args.add_argument('-t', '--token',
-                        action='store',
-                        dest='github_token',
-                        required=True,
-                        metavar='Github_Token',
-                        help='Github Token')
+    create_pr_status_args = subparsers.add_parser(
+        'pr-status',
+        help='Create PR status'
+    )
+    create_pr_status_args.add_argument(
+        '--type',
+        dest="type",
+        type=str,
+        default="create_pr_status",
+        help='Create PR status')
+    create_pr_status_args.add_argument(
+        '-t',
+        '--token',
+        action='store',
+        dest='github_token',
+        required=True,
+        metavar='Github_Token',
+        help='Github Token'
+    )
     create_pr_status_args.add_argument(
         '--state-url',
         action='store',
@@ -543,4 +589,6 @@ def get_args():
         print(e.message)
         sys.exit(-1)
 
+
+# 入口文件
 get_args()

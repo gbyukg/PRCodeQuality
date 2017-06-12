@@ -165,7 +165,7 @@ node ('master')
                     github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                     state_url: env.PR_statuses_url,
                     state: 'pending',
-                    target_url: "https://devopscn.rtp.raleigh.ibm.com:8443/job/SC-CodeQuality-Check/${env.BUILD_NUMBER}/checkstyleResult/",
+                    target_url: "${env.BUILD_URL}/console",
                     description: 'Checking code standard',
                     context: 'China CI',
                 ]
@@ -242,7 +242,7 @@ node ('master')
         stage("Prepare code standard check tool...") {
             dir("${env.GITHUB_REPO_DIR}/sugarcrm") {
                 pwd
-                sh "cp /home/shared/jenkins/workspace/SC-CodeQuality-Check@script/composer.lock ./composer.lock"
+                sh "cp ${env.CUS_SCRIPT_PATH}/library ./composer.lock"
                 cmd = "composer install"
                 try {
                     sh(cmd)
@@ -326,7 +326,7 @@ node ('master')
                 ]
             )
 
-            // 说明检测失败
+            // 说明检测成功
             if (env.ERROR_COUNT == '0') {
                 github_api(
                     [
@@ -334,7 +334,7 @@ node ('master')
                         github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                         state_url: env.PR_statuses_url,
                         state: 'success',
-                        target_url: "https://devopscn.rtp.raleigh.ibm.com:8443/job/SC-CodeQuality-Check/${env.BUILD_NUMBER}/",
+                        target_url: "${env.JOB_URL}",
                         description: 'All check passed',
                         context: 'China CI',
                     ]
@@ -352,7 +352,7 @@ node ('master')
                 github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                 state_url: env.PR_statuses_url,
                 state: 'error',
-                target_url: "https://devopscn.rtp.raleigh.ibm.com:8443/job/SC-CodeQuality-Check/${env.BUILD_NUMBER}/",
+                target_url: "${env.BUILD_URL}/checkstyleResult",
                 description: e.getMessage(),
                 context: 'China CI',
             ]
@@ -366,8 +366,8 @@ node ('master')
                 github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                 state_url: env.PR_statuses_url,
                 state: 'error',
-                target_url: "https://devopscn.rtp.raleigh.ibm.com:8443/job/SC-CodeQuality-Check/${env.BUILD_NUMBER}/console",
-                description: 'Jenkins job failed',
+                target_url: "${env.BUILD_URL}/console",
+                description: 'Code quality job failed',
                 context: 'China CI',
             ]
         )
