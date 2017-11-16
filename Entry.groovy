@@ -33,7 +33,7 @@ def github_api(Map params, String returnType = 'getStdout')
                         ]
                     ) {
                         cmd = "python ${env.UTIL_SRC}" \
-                        + " pr -p ${params.pr_number}" \
+                        + " pr -p ${params.GITHUB_PR_NUMBER}" \
                         + " -t ${github_token}"
                     }
                     break
@@ -90,7 +90,7 @@ def github_api(Map params, String returnType = 'getStdout')
                     ) {
                         cmd = "python ${env.UTIL_SRC} " \
                         + "pr-comment " \
-                        + "-p ${params.pr_number} -t ${params.github_token} " \
+                        + "-p ${params.GITHUB_PR_NUMBER} -t ${params.github_token} " \
                         + "--file ${params.checkResultFile}"
                     }
                     break
@@ -128,7 +128,7 @@ node (env.WORKING_NODE)
             // 获取 pull request 信息
             //     script pr -p pr_number -t token
             // 脚本将返回json格式的字符串
-            return_val = github_api([method: 'pr', pr_number:params.PR_NUMBER])
+            return_val = github_api([method: 'pr', pr_number:params.GITHUB_PR_NUMBER])
 
             def jsonSlurper = new JsonSlurper();
             def pr_info = jsonSlurper.parseText(return_val);
@@ -137,7 +137,7 @@ node (env.WORKING_NODE)
             if (pr_info.merged) {
                 jsonSlurper = null;
                 pr_info = null;
-                def msg = "The PR [${PR_NUMBER} https://github.com/sugareps/Mango/pull/${PR_NUMBER}] has been merged, can't check code style anymore.";
+                def msg = "The PR [${params.GITHUB_PR_NUMBER} https://github.com/sugareps/Mango/pull/${params.GITHUB_PR_NUMBER}] has been merged, can't check code style anymore.";
                 send_msg_slack("danger", msg);
                 error msg;
             }
@@ -161,7 +161,7 @@ node (env.WORKING_NODE)
             return_val = github_api(
                 [
                     method: 'pr_status',
-                    pr_number:params.PR_NUMBER,
+                    pr_number:params.GITHUB_PR_NUMBER,
                     github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                     state_url: env.PR_statuses_url,
                     state: 'pending',
@@ -195,7 +195,7 @@ node (env.WORKING_NODE)
                 [
                     $class: 'GitSCM',
                     branches: [
-                        [name: "sugareps/pr/${env.PR_NUMBER}"]
+                        [name: "sugareps/pr/${params.GITHUB_PR_NUMBER}"]
                     ],
                     doGenerateSubmoduleConfigurations: false,
                     extensions: [
@@ -269,7 +269,7 @@ node (env.WORKING_NODE)
                 [
                     method: 'parse_xml_result',
                     base_sha: env.PR_BASE_SHA,
-                    pr_number: params.PR_NUMBER,
+                    pr_number: params.GITHUB_PR_NUMBER,
                     resultFile: "${env.GITHUB_REPO_DIR}/${env.CODECHECKRESULTFILE}",
                 ],
                 'getStatus'
@@ -283,7 +283,7 @@ node (env.WORKING_NODE)
             return_val = github_api(
                 [
                     method: 'pr_comment',
-                    pr_number: params.PR_NUMBER,
+                    pr_number: params.GITHUB_PR_NUMBER,
                     github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                     checkResultFile: "${env.GITHUB_REPO_NAME}/${env.CODECHECKRESULTFILE}"
                 ]
@@ -307,7 +307,7 @@ node (env.WORKING_NODE)
             return_val = github_api(
                 [
                     method: 'pr_comment',
-                    pr_number: params.PR_NUMBER,
+                    pr_number: params.GITHUB_PR_NUMBER,
                     github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                     checkResultFile: "${env.GITHUB_REPO_NAME}/${env.CODECHECKRESULTFILE}"
                 ]
