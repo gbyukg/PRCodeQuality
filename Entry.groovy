@@ -116,7 +116,7 @@ def github_api(Map params, String returnType = 'getStdout')
     return return_val;
 }
 
-node ('master')
+node (env.WORKING_NODE)
 {
     try {
         env.PATH = "/usr/local/php5.6.30/bin:/usr/local/node-v6.10.3-linux-x64/bin:${env.PATH}"
