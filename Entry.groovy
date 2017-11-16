@@ -232,7 +232,7 @@ node ('master')
                             credentialsId: 'github_ssh_key',
                             name: 'origin',
                             refspec: '+refs/pull/*/head:refs/remotes/sugareps/pr/* +refs/heads/*:refs/remotes/origin/*',
-                            url: 'git@github.com:sugareps/Mango.git'
+                            url: env.GITHUB_REPO_URL
                         ]
                     ]
                 ]
@@ -292,7 +292,7 @@ node ('master')
         }
 
         // 创建 review comment
-        stage('Upload PR Review comment') {
+        stage('Uploading PR Review comment') {
             return_val = github_api(
                 [
                     method: 'pr_comment',
