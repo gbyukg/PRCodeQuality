@@ -239,19 +239,6 @@ node ('master')
             );
         }
 
-        stage("Prepare code standard check tool...") {
-            dir("${env.GITHUB_REPO_DIR}/sugarcrm") {
-                pwd
-                sh "cp ${env.CUS_SCRIPT_PATH}/library ./composer.lock"
-                cmd = "composer install"
-                try {
-                    sh(cmd)
-                } catch (e){
-                    error "Command failed\n[${cmd}]\n" + e.getMessage()
-                }
-            }
-        }
-
         stage('Checking code style...') {
             pwd
             def php_dir = tool name: 'php', type: 'com.cloudbees.jenkins.plugins.customtools.CustomTool'
