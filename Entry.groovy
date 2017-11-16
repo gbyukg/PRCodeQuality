@@ -229,7 +229,7 @@ node (env.WORKING_NODE)
                     submoduleCfg: [],
                     userRemoteConfigs: [
                         [
-                            credentialsId: 'github_ssh_key',
+                            credentialsId: env.GITHUB_SSH_KEY,
                             name: 'origin',
                             refspec: '+refs/pull/*/head:refs/remotes/sugareps/pr/* +refs/heads/*:refs/remotes/origin/*',
                             url: env.GITHUB_REPO_URL
