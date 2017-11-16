@@ -19,7 +19,7 @@ public class codeCheckException extends hudson.AbortException {
 def github_api(Map params, String returnType = 'getStdout')
 {
     String return_val;
-        withCredentials([string(credentialsId: CERDENTIALS_FOR_GITHUB_TOKEN, variable: 'github_token')]) {
+        withCredentials([string(credentialsId: env.CERDENTIALS_FOR_GITHUB_TOKEN, variable: 'github_token')]) {
             def cmd = null;
             switch(params.method) {
                 // 获取 Pull Request 信息
@@ -70,7 +70,7 @@ def github_api(Map params, String returnType = 'getStdout')
                 case 'pr_status':
                     cmd = "python ${env.UTIL_SRC} " \
                     + "pr-status " \
-                    + "-t ${params.github_token} " \
+                    + "-t ${github_token} " \
                     + "--state-url \"${params.state_url}\" " \
                     + "--state ${params.state} " \
                     + "--target_url \"${params.target_url}\" " \
@@ -90,7 +90,7 @@ def github_api(Map params, String returnType = 'getStdout')
                     ) {
                         cmd = "python ${env.UTIL_SRC} " \
                         + "pr-comment " \
-                        + "-p ${env.GITHUB_PR_NUMBER} -t ${params.github_token} " \
+                        + "-p ${env.GITHUB_PR_NUMBER} -t ${github_token} " \
                         + "--file ${params.checkResultFile}"
                     }
                     break
@@ -162,7 +162,6 @@ node (env.WORKING_NODE)
                 [
                     method: 'pr_status',
                     pr_number:env.GITHUB_PR_NUMBER,
-                    github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                     state_url: env.PR_statuses_url,
                     state: 'pending',
                     target_url: "${env.BUILD_URL}/console",
@@ -172,22 +171,6 @@ node (env.WORKING_NODE)
             )
         }
 
-        stage('Generating patch file...') {
-            pwd
-            // 通过 GitHub API 获取 PR diff 文件
-            // 脚本需要 TMP 环境变量, 将生成的diff文件保存到该环境变量指定的目录中
-            //     script patch -t github_token --base-sha base_sha --head-sha head_sha
-            def return_val = github_api(
-                [
-                    method: 'patch',
-                    base_sha:env.PR_BASE_SHA,
-                    head_sha:env.PR_HEAD_SHA
-                ]
-            );
-            echo return_val
-            env.PATCHFILELIST = return_val
-        }
-
         stage('Fetch Sugar code...') {
             pwd
             // Checkout branch
@@ -195,7 +178,7 @@ node (env.WORKING_NODE)
                 [
                     $class: 'GitSCM',
                     branches: [
-                        [name: "sugareps/pr/${env.GITHUB_PR_NUMBER}"]
+                        [name: "${env.GITHUB_REMOTE_NAME}/pr/${env.GITHUB_PR_NUMBER}"]
                     ],
                     doGenerateSubmoduleConfigurations: false,
                     extensions: [
@@ -230,13 +213,29 @@ node (env.WORKING_NODE)
                     userRemoteConfigs: [
                         [
                             credentialsId: env.GITHUB_SSH_KEY,
-                            name: 'origin',
-                            refspec: '+refs/pull/*/head:refs/remotes/sugareps/pr/* +refs/heads/*:refs/remotes/origin/*',
+                            name: env.GITHUB_REMOTE_NAME,
+                            refspec: "+refs/pull/*/head:refs/remotes/${env.GITHUB_REMOTE_NAME}/pr/* +refs/heads/*:refs/remotes/${env.GITHUB_REMOTE_NAME}/*",
                             url: env.GITHUB_REPO_URL
                         ]
                     ]
                 ]
             );
+        }
+
+        stage('Generating patch file...') {
+            pwd
+            // 通过 GitHub API 获取 PR diff 文件
+            // 脚本需要 TMP 环境变量, 将生成的diff文件保存到该环境变量指定的目录中
+            //     script patch -t github_token --base-sha base_sha --head-sha head_sha
+            def return_val = github_api(
+                [
+                    method: 'patch',
+                    base_sha:env.PR_BASE_SHA,
+                    head_sha:env.PR_HEAD_SHA
+                ]
+            );
+            echo return_val
+            env.PATCHFILELIST = return_val
         }
 
         stage('Checking code style...') {
@@ -284,8 +283,7 @@ node (env.WORKING_NODE)
                 [
                     method: 'pr_comment',
                     pr_number: env.GITHUB_PR_NUMBER,
-                    github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
-                    checkResultFile: "${env.GITHUB_REPO_NAME}/${env.CODECHECKRESULTFILE}"
+                    checkResultFile: "${env.GITHUB_REPO_DIR}/${env.CODECHECKRESULTFILE}"
                 ]
             )
         }
@@ -298,7 +296,7 @@ node (env.WORKING_NODE)
                 defaultEncoding: '',
                 failedTotalAll: '1',
                 healthy: '0',
-                pattern: "${env.GITHUB_REPO_NAME}/${env.CODECHECKRESULTFILE}",
+                pattern: "${env.GITHUB_REPO_DIR}/${env.CODECHECKRESULTFILE}",
                 unHealthy: '0',
                 unstableTotalAll: '0'
             )
@@ -308,8 +306,7 @@ node (env.WORKING_NODE)
                 [
                     method: 'pr_comment',
                     pr_number: env.GITHUB_PR_NUMBER,
-                    github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
-                    checkResultFile: "${env.GITHUB_REPO_NAME}/${env.CODECHECKRESULTFILE}"
+                    checkResultFile: "${env.GITHUB_REPO_DIR}/${env.CODECHECKRESULTFILE}"
                 ]
             )
 
@@ -318,7 +315,6 @@ node (env.WORKING_NODE)
                 github_api(
                     [
                         method: 'pr_status',
-                        github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                         state_url: env.PR_statuses_url,
                         state: 'success',
                         target_url: "${env.JOB_URL}",
@@ -336,7 +332,6 @@ node (env.WORKING_NODE)
         github_api(
             [
                 method: 'pr_status',
-                github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                 state_url: env.PR_statuses_url,
                 state: 'error',
                 target_url: "${env.BUILD_URL}/checkstyleResult",
@@ -350,7 +345,6 @@ node (env.WORKING_NODE)
         github_api(
             [
                 method: 'pr_status',
-                github_token: 'cf424794d4c561b76faa189326b4f7077569de5e',
                 state_url: env.PR_statuses_url,
                 state: 'error',
                 target_url: "${env.BUILD_URL}/console",
