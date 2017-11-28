@@ -278,15 +278,15 @@ node (env.WORKING_NODE)
         }
 
         // 创建 review comment
-        stage('Uploading PR Review comment') {
-            return_val = github_api(
-                [
-                    method: 'pr_comment',
-                    pr_number: env.GITHUB_PR_NUMBER,
-                    checkResultFile: "${env.GITHUB_REPO_DIR}/${env.CODECHECKRESULTFILE}"
-                ]
-            )
-        }
+        // stage('Uploading PR Review comment') {
+            // return_val = github_api(
+                // [
+                    // method: 'pr_comment',
+                    // pr_number: env.GITHUB_PR_NUMBER,
+                    // checkResultFile: "${env.GITHUB_REPO_DIR}/${env.CODECHECKRESULTFILE}"
+                // ]
+            // )
+        // }
 
         stage('Uploading result') {
             // 将结果上传到 Jenkins 中
