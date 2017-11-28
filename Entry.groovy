@@ -172,54 +172,51 @@ node (env.WORKING_NODE)
         }
 
         stage('Fetch Sugar code...') {
-            pwd
-            // Checkout branch
-            checkout(
-                [
-                    $class: 'GitSCM',
-                    branches: [
-                        [name: "${env.GITHUB_REMOTE_NAME}/pr/${env.GITHUB_PR_NUMBER}"]
-                    ],
-                    doGenerateSubmoduleConfigurations: false,
-                    extensions: [
-                        [
-                            $class: 'CloneOption',
-                            depth: 50,
-                            noTags: false,
-                            reference: '',
-                            shallow: false,
-                            timeout: 20
+            dir("${env.GITHUB_REPO_DIR}") {
+                pwd
+                checkout(
+                    [
+                        $class: 'GitSCM',
+                        branches: [
+                            [name: "${env.GITHUB_REMOTE_NAME}/pr/${env.GITHUB_PR_NUMBER}"]
                         ],
-                        [
-                            $class: 'CleanBeforeCheckout'
+                        doGenerateSubmoduleConfigurations: false,
+                        extensions: [
+                            [
+                                $class: 'CloneOption',
+                                depth: 50,
+                                noTags: false,
+                                reference: '',
+                                shallow: false,
+                                timeout: 20
+                            ],
+                            [
+                                $class: 'CleanBeforeCheckout'
+                            ],
+                            [
+                                $class: 'SubmoduleOption',
+                                disableSubmodules: false,
+                                parentCredentials: true,
+                                recursiveSubmodules: true,
+                                reference: '',
+                                trackingSubmodules: false
+                            ],
+                            [
+                                $class: 'DisableRemotePoll'
+                            ]
                         ],
-                        [
-                            $class: 'RelativeTargetDirectory',
-                            relativeTargetDir: "${env.GITHUB_REPO_NAME}"
-                        ],
-                        [
-                            $class: 'SubmoduleOption',
-                            disableSubmodules: false,
-                            parentCredentials: true,
-                            recursiveSubmodules: true,
-                            reference: '',
-                            trackingSubmodules: false
-                        ],
-                        [
-                            $class: 'DisableRemotePoll'
-                        ]
-                    ],
-                    submoduleCfg: [],
-                    userRemoteConfigs: [
-                        [
-                            credentialsId: env.GITHUB_SSH_KEY,
-                            name: env.GITHUB_REMOTE_NAME,
-                            refspec: "+refs/pull/*/head:refs/remotes/${env.GITHUB_REMOTE_NAME}/pr/* +refs/heads/*:refs/remotes/${env.GITHUB_REMOTE_NAME}/*",
-                            url: env.GITHUB_REPO_URL
+                        submoduleCfg: [],
+                        userRemoteConfigs: [
+                            [
+                                credentialsId: env.GITHUB_SSH_KEY,
+                                name: env.GITHUB_REMOTE_NAME,
+                                refspec: "+refs/pull/*/head:refs/remotes/${env.GITHUB_REMOTE_NAME}/pr/* +refs/heads/*:refs/remotes/${env.GITHUB_REMOTE_NAME}/*",
+                                url: env.GITHUB_REPO_URL
+                            ]
                         ]
                     ]
-                ]
-            );
+                )
+            }
         }
 
         stage('Generating patch file...') {
