@@ -216,6 +216,9 @@ node (env.WORKING_NODE)
                         ]
                     ]
                 )
+                dir('sugarcrm') {
+                    sh '/usr/local/php5.6.30/bin/composer install'
+                }
             }
         }
 
